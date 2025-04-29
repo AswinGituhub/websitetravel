@@ -1,0 +1,150 @@
+const express = require('express');
+const path = require('path');
+const session = require('express-session');
+const bodyParser = require('body-parser');
+
+const adminRoutes = require('./routes/adminRoutes');
+const bookingRoutes = require('./routes/bookingRoutes');
+const destinationsRoutes = require('./routes/destinationsRoutes');
+const { usersDB, destinationsDB, bookingsDB } = require('./config/db');
+
+const app = express();
+const PORT = 3000;
+
+// Sample Data
+const sampleData = {
+    bookings: [
+        { id: 1, name: 'Booking 1', status: 'Confirmed' },
+        { id: 2, name: 'Booking 2', status: 'Pending' }
+    ],
+    hotels: [
+        { id: 1, name: 'Hotel A', location: 'City A' },
+        { id: 2, name: 'Hotel B', location: 'City B' }
+    ],
+    users: [
+        { id: 1, name: 'Tarun', email: '22bit058@psgcas.ac.in' },
+        { id: 2, name: 'Nithish', email: 'infonity404@gmail.com' }
+    ],
+    vehicles: [
+        { id: 1, name: 'Vehicle A', type: 'Sedan' },
+        { id: 2, name: 'Vehicle B', type: 'SUV' }
+    ]
+};
+
+// Middleware Setup
+app.use(express.static(path.join(__dirname, 'public')));
+app.use('/images', express.static(path.join(__dirname, 'public', 'images')));
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'views'));
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json());
+
+app.use(session({
+    secret: 'your-secret-key',
+    resave: false,
+    saveUninitialized: true
+}));
+
+// Global session middleware
+app.use((req, res, next) => {
+    res.locals.user = req.session.user || null;
+    res.locals.admin = req.session.admin || null;
+    next();
+});
+
+// Register routes
+app.use('/admin', adminRoutes);
+app.use('/book', bookingRoutes);
+app.use('/destinations', destinationsRoutes);
+
+// User Authentication Routes
+app.get('/auth/login', (req, res) => res.render('login'));
+app.post('/auth/login', async (req, res) => {
+    const { email, password } = req.body;
+    try {
+        const user = await usersDB.get('user_' + email);
+        if (user.password === password) {
+            req.session.user = user;
+            res.redirect('/');
+        } else {
+            res.send('Invalid credentials');
+        }
+    } catch (err) {
+        res.status(500).send('Error logging in');
+    }
+});
+
+app.get('/auth/signup', (req, res) => res.render('signup'));
+app.post('/auth/signup', async (req, res) => {
+    const { name, email, password } = req.body;
+    try {
+        const existingUser = await usersDB.get('user_' + email);
+        if (existingUser) return res.send('User already exists');
+        await usersDB.insert({ _id: 'user_' + email, name, email, password });
+        res.redirect('/auth/login');
+    } catch (err) {
+        if (err.statusCode === 404) {
+            await usersDB.insert({ _id: 'user_' + email, name, email, password });
+            res.redirect('/auth/login');
+        } else {
+            res.status(500).send('Error signing up');
+        }
+    }
+});
+
+app.get('/auth/logout', (req, res) => {
+    req.session.destroy(err => err ? res.status(500).send('Error logging out') : res.redirect('/auth/login'));
+});
+
+// Admin Routes
+app.get('/admin/login', (req, res) => res.render('admin_login'));
+app.post('/admin/login', async (req, res) => {
+    const { email, password } = req.body;
+    try {
+        const admin = await usersDB.get('admin_' + email);
+        if (admin.password === password) {
+            req.session.admin = admin;
+            res.redirect('/admin/dashboard');
+        } else {
+            res.send('Invalid admin credentials');
+        }
+    } catch (err) {
+        res.status(500).send('Error logging in');
+    }
+});
+
+app.get('/admin/logout', (req, res) => {
+    req.session.destroy(err => err ? res.status(500).send('Error logging out') : res.redirect('/admin/login'));
+});
+
+app.get('/admin/dashboard', (req, res) => {
+    if (!req.session.admin) return res.redirect('/admin/login');
+    res.render('admin/dashboard', { admin: req.session.admin, page: req.query.page || 'overview', ...sampleData });
+});
+
+// Main User Routes
+app.get('/', async (req, res) => {
+    if (!req.session.user) return res.redirect('/auth/login');
+    try {
+        const destinations = await destinationsDB.view('destinations', 'all');
+        res.render('home', { destinations: destinations.rows.map(row => row.value), user: req.session.user });
+    } catch (err) {
+        res.status(500).send('Error fetching destinations');
+    }
+});
+
+// Static Pages Routes
+['about', 'packages', 'contact', 'booknow', 'trackvehicle', 'viewhotel'].forEach(page => {
+    app.get(`/${page}`, (req, res) => {
+        if (!req.session.user) return res.redirect('/auth/login');
+        res.render(page);
+    });
+});
+
+// Success Page
+app.get('/success', (req, res) => res.render('success'));
+
+// Start the Server
+app.listen(PORT, () => {
+    console.log(`Server running at http://127.0.0.1:${PORT}`);
+});

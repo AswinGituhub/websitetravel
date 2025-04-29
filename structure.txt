@@ -1,0 +1,34 @@
+/travel-agency
+│
+├── /public
+│   ├── /css
+│   ├── /js
+│   ├── /images
+│   └── index.html
+├   └── about.html
+│   ├── destinations.html
+│   ├── packages.html
+│   ├── booking.html
+│   ├── contact.html
+│   ├── dashboard.html
+│   └── hotel-login.html
+│
+│
+├── /routes
+│   ├── home.js
+│   ├── about.js
+│   ├── booking.js
+│   ├── contact.js
+│   ├── dashboard.js
+│   ├── hotel.js
+│   └── food-order.js
+│
+├── /models
+│   ├── userModel.js
+│   ├── bookingModel.js
+│   ├── packageModel.js
+│   ├── hotelModel.js
+│   └── foodOrderModel.js
+│
+├── server.js
+└── firebase-config.js
